@@ -11,15 +11,21 @@ import {
   Legend,
 } from 'recharts';
 
-// import {
-//   formatCompactCurrency,
-//   formatCurrency,
-//   formatPercentage,
-// } from '@/lib/number-format';
+type AssetAllocationItem = {
+  category_code: string;
+  name: string;
+  total_value: number;
+};
+
+type AssetAllocationDonutProps = {
+  netWorth?: number;
+  currency?: string;
+  assetAllocation?: AssetAllocationItem[];
+};
 
 const COLORS = ['red', 'white', 'purple', 'pink', 'green', 'grey'];
 
-const assetAllocation = [
+const DEFAULT_ASSET_ALLOCATION: AssetAllocationItem[] = [
   {
     category_code: 'cash',
     name: 'Cash & Equivalents',
@@ -47,19 +53,25 @@ const assetAllocation = [
   },
 ];
 
-const netWorth = 1973944.93;
-const currency = 'USD';
+const DEFAULT_NET_WORTH = 1973944.93;
+const DEFAULT_CURRENCY = 'USD';
 
-export default function AssetAllocationDonut({}: {
-  netWorth: number;
-  currency: string;
-  assetAllocation: Array<{
-    category_code: string;
-    name: string;
-    total_value: number;
-  }>;
-}) {
-  // Calculate total value for percentage calculation
+function formatValue(value: number, currency: string) {
+  return `${new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 2,
+  }).format(value)} ${currency}`;
+}
+
+function formatPercentage(value: number, total: number) {
+  if (total <= 0) return '0.0%';
+  return `${((value / total) * 100).toFixed(1)}%`;
+}
+
+export default function AssetAllocationDonut({
+  netWorth = DEFAULT_NET_WORTH,
+  currency = DEFAULT_CURRENCY,
+  assetAllocation = DEFAULT_ASSET_ALLOCATION,
+}: AssetAllocationDonutProps) {
   const totalHoldingsValue = useMemo(() => {
     return assetAllocation.reduce((sum, item) => sum + item.total_value, 0);
   }, [assetAllocation]);
@@ -76,23 +88,22 @@ export default function AssetAllocationDonut({}: {
               data={assetAllocation}
               dataKey="total_value"
               nameKey="name"
-              innerRadius={'80%'}
-              outerRadius={'90%'}
+              innerRadius="80%"
+              outerRadius="90%"
               paddingAngle={2}
               cornerRadius={99}
               labelLine={false}
             >
-              {assetAllocation.map((_, index) => (
+              {assetAllocation.map((item, index) => (
                 <Cell
-                  key={`cell-${index}`}
+                  key={item.category_code}
                   fill={COLORS[index % COLORS.length]}
                   stroke="none"
                 />
               ))}
-              {/* works like in 3.1.0 */}
               <Label
                 position="center"
-                value={`${netWorth} ${currency}`}
+                value={formatValue(netWorth, currency)}
                 style={{
                   fontSize: '16px',
                   fontWeight: 'bolder',
@@ -109,44 +120,6 @@ export default function AssetAllocationDonut({}: {
                 }}
                 dy={15}
               />
-              {/* centers on the whole thing not just the pie */}
-              {/* <Label
-                content={({ viewBox }) => {
-                  if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                    return (
-                      <text
-                        x={viewBox.cx}
-                        y={viewBox.cy}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        <tspan
-                          x={viewBox.cx}
-                          y={(viewBox.cy || 0) - 5}
-                          style={{
-                            fontSize: '16px',
-                            fontWeight: 'bolder',
-                            fill: '#fff',
-                          }}
-                        >
-                          {`${netWorth} ${currency}`}
-                        </tspan>
-                        <tspan
-                          x={viewBox.cx}
-                          y={(viewBox.cy || 0) + 15}
-                          style={{
-                            fontSize: '12px',
-                            fill: '#fff',
-                          }}
-                        >
-                          Net Worth
-                        </tspan>
-                      </text>
-                    );
-                  }
-                  return null;
-                }}
-              /> */}
             </Pie>
             <Tooltip
               wrapperStyle={{ zIndex: 10 }}
@@ -164,7 +137,7 @@ export default function AssetAllocationDonut({}: {
                       {data.payload.name}
                     </span>
                     <span className="text-foreground text-xs font-semibold">
-                      {`${Number(data.value)}, ${currency})`}
+                      {formatValue(Number(data.value), currency)}
                     </span>
                   </div>
                 );
@@ -176,37 +149,39 @@ export default function AssetAllocationDonut({}: {
               align="right"
               wrapperStyle={{ width: '45%', right: 0, zIndex: 1 }}
               content={({ payload }) => {
-                if (payload)
-                  return (
-                    <ul className="flex flex-col gap-2">
-                      {payload.map((entry, index) => {
-                        // Fix for Recharts 3.0: Access data from entry.payload instead
-                        const categoryData = assetAllocation.find(
-                          (item) => item.name === entry.value
-                        );
+                if (!payload) return null;
 
-                        return (
-                          <li key={`item-${index}`}>
-                            <div className="flex items-center gap-1">
-                              <div
-                                className="h-2 w-2 shrink-0 rounded-[2px]"
-                                style={{ backgroundColor: entry.color }}
-                              />
-                              <span className="text-xs">
-                                {entry.value}{' '}
+                return (
+                  <ul className="flex flex-col gap-2">
+                    {payload.map((entry) => {
+                      const categoryData = assetAllocation.find(
+                        (item) => item.name === entry.value,
+                      );
+
+                      return (
+                        <li key={entry.value}>
+                          <div className="flex items-center gap-1">
+                            <div
+                              className="h-2 w-2 shrink-0 rounded-[2px]"
+                              style={{ backgroundColor: entry.color }}
+                            />
+                            <span className="text-xs">
+                              {entry.value}{' '}
+                              {categoryData && (
                                 <span className="text-muted-foreground text-xs">
-                                  {categoryData &&
-                                    categoryData.total_value /
-                                      totalHoldingsValue}
+                                  {formatPercentage(
+                                    categoryData.total_value,
+                                    totalHoldingsValue,
+                                  )}
                                 </span>
-                              </span>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  );
-                return null;
+                              )}
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
               }}
             />
           </PieChart>
